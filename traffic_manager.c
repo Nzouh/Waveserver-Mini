@@ -18,17 +18,103 @@ void initialize_stats()
 
 void generate_traffic()
 {
-    // TODO: F1 — Traffic Generation (/8 pts)
-    //
-    // Generate an OTN frame, query the connection manager for a valid route,
-    // and forward or drop accordingly. Update both local traffic stats and
-    // the port manager's per-port counters.
-    //
-    // Refer to common.h for the relevant structs and message types.
-    // A port value of 0 in stats means "randomize within its valid range."
+    otn_frame_t pkt = {0};
+    uint8_t cport;
+    uint8_t lport;
 
+    if (stats.client_port == 0)
+        cport = (rand() % 4) + 3;
+    else
+        cport = stats.client_port;
+
+    if (stats.line_port == 0)
+        lport = (rand() % 2) + 1;
+    else
+        lport = stats.line_port;
+
+    pkt.header.client_port = cport;
+    pkt.header.line_port = lport;
+    pkt.header.frame_id = stats.next_frame_id++;
+
+    snprintf(pkt.data, sizeof(pkt.data),
+             "f-%u c-%u l-%u",
+             pkt.header.frame_id,
+             pkt.header.client_port,
+             pkt.header.line_port);
+
+    udp_message_t out = {0};
+    udp_message_t in = {0};
+    udp_route_lookup_request_t q = {0};
+
+    out.msg_type = MSG_LOOKUP_CONNECTION;
+    out.status = STATUS_REQUEST;
+
+    q.client_port = pkt.header.client_port;
+    q.line_port = pkt.header.line_port;
+
+    memcpy(out.payload, &q, sizeof(q));
+
+    if (!send_udp_message_and_receive(client_socket, &out, &in, CONN_MANAGER_UDP))
+    {
+        stats.total_dropped++;
+
+        udp_message_t upd = {0};
+        udp_counter_update_t cnt = {0};
+
+        upd.msg_type = MSG_UPDATE_COUNTERS;
+        upd.status = STATUS_REQUEST;
+
+        cnt.port_id = pkt.header.client_port;
+        cnt.pkts_rx = 0;
+        cnt.pkts_dropped = 1;
+
+        memcpy(upd.payload, &cnt, sizeof(cnt));
+        send_udp_message_one_way(client_socket, &upd, PORT_MANAGER_UDP);
+
+        return;
+    }
+
+    if (in.status == STATUS_SUCCESS)
+    {
+        udp_route_lookup_reply_t r = {0};
+        memcpy(&r, in.payload, sizeof(r));
+
+        if (r.operational_state == CONN_UP)
+        {
+            stats.total_forwarded++;
+
+            udp_message_t upd = {0};
+            udp_counter_update_t cnt = {0};
+
+            upd.msg_type = MSG_UPDATE_COUNTERS;
+            upd.status = STATUS_REQUEST;
+
+            cnt.port_id = pkt.header.client_port;
+            cnt.pkts_rx = 1;
+            cnt.pkts_dropped = 0;
+
+            memcpy(upd.payload, &cnt, sizeof(cnt));
+            send_udp_message_one_way(client_socket, &upd, PORT_MANAGER_UDP);
+
+            return;
+        }
+    }
+
+    stats.total_dropped++;
+
+    udp_message_t upd = {0};
+    udp_counter_update_t cnt = {0};
+
+    upd.msg_type = MSG_UPDATE_COUNTERS;
+    upd.status = STATUS_REQUEST;
+
+    cnt.port_id = pkt.header.client_port;
+    cnt.pkts_rx = 0;
+    cnt.pkts_dropped = 1;
+
+    memcpy(upd.payload, &cnt, sizeof(cnt));
+    send_udp_message_one_way(client_socket, &upd, PORT_MANAGER_UDP);
 }
-
 void handle_get_traffic_stats(udp_message_t *resp)
 {
     resp->msg_type = MSG_GET_TRAFFIC_STATS;

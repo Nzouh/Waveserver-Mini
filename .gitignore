@@ -3,3 +3,4 @@ conn_manager
 port_manager
 traffic_manager
 wsmini.log
+.vscode/
