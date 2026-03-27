@@ -482,6 +482,80 @@ void cmd_stop_traffic(void)
 }
 
 /**
+ * set protection group — Enable 1+1 line protection between port 1 and port 2.
+ */
+void cmd_set_protection_group(void)
+{
+    udp_message_t req = {0};
+    req.msg_type = MSG_SET_PROTECTION_GROUP;
+    req.status = STATUS_REQUEST;
+
+    udp_message_t resp = {0};
+    if (!send_and_receive(&req, &resp, PROTECTION_MGR_UDP) || resp.status != STATUS_SUCCESS)
+    {
+        print_cmd_error(&resp, "set protection group", "");
+        return;
+    }
+    printf("[OK] Protection group created: port-1 <-> port-2\n");
+}
+
+/**
+ * delete protection group — Disable 1+1 line protection.
+ */
+void cmd_delete_protection_group(void)
+{
+    udp_message_t req = {0};
+    req.msg_type = MSG_DELETE_PROTECTION_GROUP;
+    req.status = STATUS_REQUEST;
+
+    udp_message_t resp = {0};
+    if (!send_and_receive(&req, &resp, PROTECTION_MGR_UDP) || resp.status != STATUS_SUCCESS)
+    {
+        print_cmd_error(&resp, "delete protection group", "");
+        return;
+    }
+    printf("[OK] Protection group deleted\n");
+}
+
+/**
+ * show protection group — Display protection group state and connection status.
+ */
+void cmd_show_protection_group(void)
+{
+    udp_message_t req = {0};
+    req.msg_type = MSG_GET_PROTECTION_GROUP;
+    req.status = STATUS_REQUEST;
+
+    udp_message_t resp = {0};
+    if (!send_and_receive(&req, &resp, PROTECTION_MGR_UDP) || resp.status != STATUS_SUCCESS)
+    {
+        printf("[ERROR] Failed to get protection group state\n");
+        return;
+    }
+
+    udp_get_protection_group_reply_t *reply = (udp_get_protection_group_reply_t *)resp.payload;
+    protection_group_t *group = &reply->group;
+
+    printf("\n");
+    printf("  Protection Group: %s\n", group->active ? "ACTIVE" : "INACTIVE");
+    printf("  Members:          port-%u <-> port-%u\n", group->line_a, group->line_b);
+    printf("  Switchovers:      %u\n", group->switchover_count);
+    printf("  Connection  Original Line  Current Line  State\n");
+    printf("  ──────────  ─────────────  ────────────  ──────────\n");
+
+    for (uint8_t i = 0; i < reply->conn_count; i++)
+    {
+        protected_connection_t *conn = &reply->conns[i];
+        printf("  %-10s  port-%-7u  port-%-8u  %s\n",
+               conn->conn_name,
+               conn->original_line_port,
+               conn->current_line_port,
+               conn->switched ? "switched" : "normal");
+    }
+    printf("\n");
+}
+
+/**
  * help — Print all available commands.
  */
 void cmd_help(void)
@@ -593,6 +667,10 @@ bool parse_and_execute(char *input)
             }
             cmd_show_logs(level, service);
         }
+        else if (strcmp(tokens[1], "protection") == 0 && token_count >= 3 && strcmp(tokens[2], "group") == 0)
+        {
+            cmd_show_protection_group();
+        }
         else
         {
             fprintf(stderr, "[ERROR] Unknown show command: %s\n", tokens[1]);
@@ -609,8 +687,17 @@ bool parse_and_execute(char *input)
         return true;
     }
 
+    // ---- set protection group ----
+    if (strcmp(tokens[0], "set") == 0 && token_count >= 3 &&
+        strcmp(tokens[1], "protection") == 0 && strcmp(tokens[2], "group") == 0)
+    {
+        cmd_set_protection_group();
+        return true;
+    }
+
     // ---- delete port <id> ----
     // ---- delete connection <name> ----
+    // ---- delete protection group ----
     if (strcmp(tokens[0], "delete") == 0 && token_count >= 3)
     {
         if (strcmp(tokens[1], "port") == 0)
@@ -621,6 +708,10 @@ bool parse_and_execute(char *input)
         else if (strcmp(tokens[1], "connection") == 0)
         {
             cmd_delete_connection(tokens[2]);
+        }
+        else if (strcmp(tokens[1], "protection") == 0 && strcmp(tokens[2], "group") == 0)
+        {
+            cmd_delete_protection_group();
         }
         else
         {

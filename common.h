@@ -11,6 +11,7 @@
 #define PORT_MANAGER_UDP (5001)
 #define CONN_MANAGER_UDP (5002)
 #define TRAFFIC_MGR_UDP (5003)
+#define PROTECTION_MGR_UDP (5004)
 
 #define MAX_UDP_MSG_SIZE (512)
 #define MAX_CONN_NAME_CHARACTER (32)
@@ -128,6 +129,13 @@ typedef enum
     MSG_GET_TRAFFIC_STATS, // CLI → Traffic Mgr : get traffic counters and if traffic up/down (request → reply)
     MSG_START_TRAFFIC,     // CLI → Traffic Mgr : start frame generation (request → reply)
     MSG_STOP_TRAFFIC,      // CLI → Traffic Mgr : stop frame generation (request → reply)
+
+    // Protection Manager messages
+    MSG_SET_PROTECTION_GROUP,   // CLI → Protection Mgr : enable group (request → reply)
+    MSG_DELETE_PROTECTION_GROUP,// CLI → Protection Mgr : disable group (request → reply)
+    MSG_GET_PROTECTION_GROUP,   // CLI → Protection Mgr : show group state (request → reply)
+    MSG_PROTECTION_FAULT_EVENT, // Port Mgr → Protection Mgr : fault injected/cleared (fire-and-forget)
+    MSG_SWITCH_CONNECTION_LINE, // Protection Mgr → Conn Mgr : switch a connection's line (request → reply)
 } msg_type_t;
 
 typedef enum
@@ -213,6 +221,49 @@ typedef struct
     uint8_t client_port; // 0 = random (3-6)
     uint8_t line_port;   // 0 = random (1-2)
 } udp_start_traffic_request_t;
+
+// MSG_PROTECTION_FAULT_EVENT (fire-and-forget)
+typedef struct
+{
+    uint8_t port_id;
+    bool fault_active; // true = injected fault, false = cleared fault
+} udp_protection_fault_event_t;
+
+// MSG_SWITCH_CONNECTION_LINE request
+typedef struct
+{
+    char name[MAX_CONN_NAME_CHARACTER];
+    uint8_t new_line_port;
+} udp_switch_connection_line_request_t;
+
+// prot manager
+#define PROTECTION_LINE_A (1)
+#define PROTECTION_LINE_B (2)
+
+typedef struct
+{
+    bool active;
+    uint8_t line_a;
+    uint8_t line_b;
+    uint32_t switchover_count;
+} protection_group_t;
+
+typedef struct
+{
+    bool in_use;
+    char conn_name[MAX_CONN_NAME_CHARACTER];
+    uint8_t client_port;
+    uint8_t original_line_port;
+    uint8_t current_line_port;
+    bool switched;
+} protected_connection_t;
+
+typedef struct
+{
+    protection_group_t group;
+    protected_connection_t conns[MAX_CONNS];
+    uint8_t conn_count;
+} udp_get_protection_group_reply_t;
 
 ////// Shared functions /////
 int create_udp_server(uint16_t);

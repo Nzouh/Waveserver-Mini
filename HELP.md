@@ -85,3 +85,7 @@ while (fgets(line, sizeof(line), f) != NULL) {
 but line needs to be long enough and in process line can check type. remind to `fclose(f);`
 
 by default we read 15 lines or so and adding argument for more lines
+
+
+# f7
+can get from inject fault f2 waiting for that
