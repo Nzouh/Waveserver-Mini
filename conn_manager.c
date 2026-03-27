@@ -35,7 +35,7 @@ bool get_port_info(uint8_t port_id, port_t *out)
         return false;
     }
 
-    memcpy(out, resp.payload, sizeof(out)); // fix b5
+    memcpy(out, resp.payload, sizeof(port_t)); // fix b5
     return true;
 }
 

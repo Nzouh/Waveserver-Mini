@@ -63,6 +63,22 @@ void notify_port_state(uint8_t port_id)
         ports[port_idx].operational_state == PORT_UP ? "UP" : "DOWN");
 }
 
+void notify_protection_fault_event(uint8_t port_id, bool fault_active)
+{
+    udp_message_t udp_request = {0};
+    udp_request.msg_type = MSG_PROTECTION_FAULT_EVENT;
+    udp_request.status = STATUS_REQUEST;
+
+    udp_protection_fault_event_t *payload = (udp_protection_fault_event_t *)udp_request.payload;
+    payload->port_id = port_id;
+    payload->fault_active = fault_active;
+
+    send_udp_message_one_way(notify_socket, &udp_request, PROTECTION_MGR_UDP);
+    LOG(LOG_DEBUG, "Notified protection_mgr: port_id=%d, fault=%s",
+        port_id,
+        fault_active ? "active" : "cleared");
+}
+
 void recalculate_oper_state(port_t *port) {
     port_state_t prev_state = port->operational_state;
     port->operational_state = (port->admin_enabled && !port->fault_active) ? PORT_UP : PORT_DOWN;
@@ -156,6 +172,7 @@ void handle_inject_fault(const udp_message_t *request, udp_message_t *response)
 
     port->fault_active = true;
     recalculate_oper_state(port);
+    notify_protection_fault_event(port->id, true);
     LOG(LOG_ERROR, "Fault injected on port-%d", port->id);
     response->status = STATUS_SUCCESS;
 }
@@ -172,6 +189,7 @@ void handle_clear_fault(const udp_message_t *request, udp_message_t *response)
 
     port->fault_active = false;
     recalculate_oper_state(port);
+    notify_protection_fault_event(port->id, false);
     LOG(LOG_INFO, "Fault cleared on port-%d", port->id);
     response->status = STATUS_SUCCESS;
 }
