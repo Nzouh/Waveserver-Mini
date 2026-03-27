@@ -20,6 +20,8 @@
 
 #define LOG_FILE_PATH "wsmini.log"
 
+#define DEFAULT_SHOW_LOGS_LINES (20)
+
 ////// LOGGING ////
 typedef enum
 {

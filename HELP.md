@@ -61,3 +61,27 @@ DOWN. Connection xc-3 uses Line Port 2 which is healthy, so it stays UP.
 **Does NOT do:**
 - Does not manage port state (that's Port Manager's job)
 - Does not forward traffic (that's Traffic Manager's job)
+
+## b5 and f3 done
+
+
+
+# F5
+
+reading files in c:
+
+fopen() from stdio.h
+```c
+FILE *fopen(const char *filename, const char *mode); 
+FILE *f = fopen(LOG_FILE_PATH, "r"); // purely readonly mode
+```
+FILE can be read with 
+
+char line[256];
+while (fgets(line, sizeof(line), f) != NULL) {
+    // process line
+}
+
+but line needs to be long enough and in process line can check type. remind to `fclose(f);`
+
+by default we read 15 lines or so and adding argument for more lines
