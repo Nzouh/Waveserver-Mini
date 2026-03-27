@@ -35,7 +35,7 @@ bool get_port_info(uint8_t port_id, port_t *out)
         return false;
     }
 
-    memcpy(out, resp.payload, sizeof(out));
+    memcpy(out, resp.payload, sizeof(out)); // fix b5
     return true;
 }
 
@@ -145,16 +145,92 @@ void handle_lookup_connection(const udp_message_t *req, udp_message_t *resp)
 
 void handle_create_connection(const udp_message_t *req, udp_message_t *resp)
 {
-    // TODO: F3 — Create Connection Handler (/5 pts)
-    //
-    // Implement the logic to create a new connection between a line port
-    // and a client port. The request payload tells you the desired name for the connection
-    // and port pair — see common.h for the struct.
-    //
-    // Refer to the HLD for connection creation validation instructions.
-    // Use set_error_msg() to report *why* a create was rejected.
-}
+    const udp_create_conn_request_t *payload = (const udp_create_conn_request_t *)req->payload;
+    uint8_t client_port = payload->client_port;
+    uint8_t line_port = payload->line_port;
 
+    resp->status = STATUS_FAILURE;
+
+    size_t name_len = strlen(payload->name);
+    if (name_len == 0 || name_len >= MAX_CONN_NAME_CHARACTER)
+    {
+        set_error_msg(resp, "connection name must be 1-31 chars");
+        LOG(LOG_ERROR, "create connection failed: invalid name length");
+        return;
+    }
+
+    if (find_connection_by_name(payload->name) != NULL)
+    {
+        set_error_msg(resp, "connection name already exists");
+        LOG(LOG_ERROR, "create connection failed: duplicate name '%s'", payload->name);
+        return;
+    }
+
+    if (client_port < MIN_CLIENT_PORT || client_port >= MIN_CLIENT_PORT + MAX_CLIENT_PORTS ||
+        line_port < MIN_LINE_PORT || line_port >= MIN_LINE_PORT + MAX_LINE_PORTS)
+    {
+        set_error_msg(resp, "ports must be one client (3-6) and one line (1-2)");
+        LOG(LOG_ERROR, "create connection failed: invalid port pair (%u, %u)",
+            payload->client_port, payload->line_port);
+        return;
+    }
+
+    for (int i = 0; i < MAX_CONNS; i++)
+    {
+        if (conns[i].client_port == client_port)
+        {
+            set_error_msg(resp, "client port already has a connection");
+            LOG(LOG_ERROR, "create connection failed: client port-%u already in use by %s",
+                client_port, conns[i].conn_name);
+            return;
+        }
+    }
+
+    int free_idx = -1;
+    for (int i = 0; i < MAX_CONNS; i++)
+    {
+        if (conns[i].client_port == 0)
+        {
+            free_idx = i;
+            break;
+        }
+    }
+
+    if (free_idx < 0)
+    {
+        set_error_msg(resp, "connection table full");
+        LOG(LOG_ERROR, "create connection failed: table full");
+        return;
+    }
+
+    port_t client_port_info = {0};
+    port_t line_port_info = {0};
+    if (!get_port_info(client_port, &client_port_info) || !get_port_info(line_port, &line_port_info))
+    {
+        set_error_msg(resp, "failed to fetch port info");
+        LOG(LOG_ERROR, "create connection failed: could not fetch port info");
+        return;
+    }
+
+    if (client_port_info.operational_state != PORT_UP || line_port_info.operational_state != PORT_UP)
+    {
+        set_error_msg(resp, "both ports must be UP");
+        LOG(LOG_ERROR, "create connection failed: one/both ports DOWN");
+        return;
+    }
+
+    // clear array space
+    memset(&conns[free_idx], 0, sizeof(conns[free_idx]));
+
+    // add new connection
+    strncpy(conns[free_idx].conn_name, payload->name, MAX_CONN_NAME_CHARACTER - 1);
+    conns[free_idx].client_port = client_port;
+    conns[free_idx].line_port = line_port;
+    conns[free_idx].operational_state = CONN_UP;
+
+    // set status
+    resp->status = STATUS_SUCCESS;
+}
 void handle_get_connections(udp_message_t *resp)
 {
     resp->status = STATUS_SUCCESS;
