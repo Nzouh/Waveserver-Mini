@@ -227,17 +227,20 @@ int main()
             if(now - last_check >= 5){
                 LOG(LOG_INFO, "----------------------------- HEALTH CHECK -----------------------------");
                 
-                for(int i = 0; i < MAX_CLIENT_PORTS; i++ ){
+                for(int i = 0; i < MAX_PORT_NUM; i++ ){
                     LOG(LOG_INFO, "port_idx=%d, (%s), admin=%s, fault=%s, oper=%s, received=%u, dropped=%u", i, 
                     (ports[i].type == LINE_PORT) ? "LINE": "CLIENT", 
                     (ports[i].admin_enabled) ? "Enabled": "Disabled", 
                     (ports[i].fault_active) ? "active": "None", 
                     (ports[i].operational_state  == PORT_UP) ? "UP" : "DOWN",
-                    ports[i].dropped_frames,
-                    ports[i].rx_frames)
+                    ports[i].rx_frames,
+                    ports[i].dropped_frames)
                 }
+            
+            last_check = now;
+        
 
-            }
+            
         }
 
         // [26-03-24 10:29:48] [INFO] [port_mgr] [port_manager.c:231] ----------------------------- HEALTH CHECK -----------------------------
