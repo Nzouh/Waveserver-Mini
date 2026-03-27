@@ -40,6 +40,9 @@ void log_write(log_level_t level, const char *file, int line, const char *fmt,
 #define MAX_PORT_NUM (6)
 #define MAX_LINE_PORTS (2)
 #define MAX_CLIENT_PORTS (4)
+// added missing defines that can be useful
+#define MIN_CLIENT_PORT (3)
+#define MIN_LINE_PORT (1)
 
 typedef enum
 {
