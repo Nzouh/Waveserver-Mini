@@ -1,4 +1,4 @@
-#include "common.h"
+  #include "common.h"
 #include <errno.h>
 #include <stdint.h>
 
@@ -193,6 +193,7 @@ int main()
         return 1;
     }
 
+    time_t last_check = time(NULL);
     while (true)
     {
         udp_message_t req = {0};
@@ -219,6 +220,26 @@ int main()
         // The health check should walk through every port and log a
         // summary of its current state at LOG_INFO level.
         // e.g.,
+
+
+        time_t now = time(NULL);
+
+            if(now - last_check >= 5){
+                LOG(LOG_INFO, "----------------------------- HEALTH CHECK -----------------------------");
+                
+                for(int i = 0; i < MAX_CLIENT_PORTS; i++ ){
+                    LOG(LOG_INFO, "port_idx=%d, (%s), admin=%s, fault=%s, oper=%s, received=%u, dropped=%u", i, 
+                    (ports[i].type == LINE_PORT) ? "LINE": "CLIENT", 
+                    (ports[i].admin_enabled) ? "Enabled": "Disabled", 
+                    (ports[i].fault_active) ? "active": "None", 
+                    (ports[i].operational_state  == PORT_UP) ? "UP" : "DOWN",
+                    ports[i].dropped_frames,
+                    ports[i].rx_frames)
+                }
+
+            }
+        }
+
         // [26-03-24 10:29:48] [INFO] [port_mgr] [port_manager.c:231] ----------------------------- HEALTH CHECK -----------------------------
         // [26-03-24 10:29:48] [INFO] [port_mgr] [port_manager.c:235] port_idx=0 (LINE) admin=Disabled fault=None oper=DOWN received=0 dropped=0
         // [26-03-24 10:29:48] [INFO] [port_mgr] [port_manager.c:235] port_idx=1 (LINE) admin=Disabled fault=None oper=DOWN received=0 dropped=0
