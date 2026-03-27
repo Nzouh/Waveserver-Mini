@@ -1,4 +1,4 @@
-  #include "common.h"
+#include "common.h"
 #include <errno.h>
 #include <stdint.h>
 
@@ -144,6 +144,38 @@ void handle_delete_port(const udp_message_t *request, udp_message_t *response)
     response->status = STATUS_SUCCESS;
 }
 
+void handle_inject_fault(const udp_message_t *request, udp_message_t *response)
+{
+    port_t *port = get_port_from_request(request, response);
+    if (!port) return;
+
+    if (!port->admin_enabled) {
+        set_error_msg(response, "cannot inject fault on disabled port");
+        return;
+    }
+
+    port->fault_active = true;
+    recalculate_oper_state(port);
+    LOG(LOG_ERROR, "Fault injected on port-%d", port->id);
+    response->status = STATUS_SUCCESS;
+}
+
+void handle_clear_fault(const udp_message_t *request, udp_message_t *response)
+{
+    port_t *port = get_port_from_request(request, response);
+    if (!port) return;
+
+    if (!port->admin_enabled) {
+        set_error_msg(response, "cannot clear fault on disabled port");
+        return;
+    }
+
+    port->fault_active = false;
+    recalculate_oper_state(port);
+    LOG(LOG_INFO, "Fault cleared on port-%d", port->id);
+    response->status = STATUS_SUCCESS;
+}
+
 bool dispatch(const udp_message_t *req, udp_message_t *resp)
 {
     bool send_reply = true;
@@ -165,6 +197,14 @@ bool dispatch(const udp_message_t *req, udp_message_t *resp)
         break;
     case MSG_DELETE_PORT:
         handle_delete_port(req, resp);
+        break;
+    case MSG_INJECT_FAULT:
+        handle_inject_fault(req, resp);
+        send_reply = true;
+        break;
+    case MSG_CLEAR_FAULT:
+        handle_clear_fault(req, resp);
+        send_reply = true;
         break;
     default:
         LOG(LOG_WARN, "Unknown msg_type: %d", req->msg_type);
