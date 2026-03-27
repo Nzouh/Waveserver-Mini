@@ -275,6 +275,48 @@ void handle_delete_conn(const udp_message_t *req, udp_message_t *resp)
     LOG(LOG_INFO, "deleted connection '%s'", udp_payload->name);
 }
 
+void handle_switch_connection_line(const udp_message_t *req, udp_message_t *resp)
+{
+    const udp_switch_connection_line_request_t *payload = (const udp_switch_connection_line_request_t *)req->payload;
+
+    if (payload->new_line_port < MIN_LINE_PORT || payload->new_line_port >= MIN_LINE_PORT + MAX_LINE_PORTS)
+    {
+        set_error_msg(resp, "new line port must be 1 or 2");
+        LOG(LOG_ERROR, "switch connection failed: invalid line port %u", payload->new_line_port);
+        return;
+    }
+
+    conn_t *conn = find_connection_by_name(payload->name);
+    if (conn == NULL)
+    {
+        set_error_msg(resp, "connection not found");
+        LOG(LOG_ERROR, "switch connection failed: %s not found", payload->name);
+        return;
+    }
+
+    uint8_t old_line = conn->line_port;
+    conn->line_port = payload->new_line_port;
+
+    port_t client_info = {0};
+    port_t line_info = {0};
+    if (get_port_info(conn->client_port, &client_info) && get_port_info(conn->line_port, &line_info) &&
+        client_info.operational_state == PORT_UP && line_info.operational_state == PORT_UP)
+    {
+        conn->operational_state = CONN_UP;
+    }
+    else
+    {
+        conn->operational_state = CONN_DOWN;
+    }
+
+    resp->status = STATUS_SUCCESS;
+    LOG(LOG_INFO, "Connection %s switched line: %u -> %u (state=%s)",
+        conn->conn_name,
+        old_line,
+        conn->line_port,
+        conn->operational_state == CONN_UP ? "UP" : "DOWN");
+}
+
 bool dispatch(const udp_message_t *req, udp_message_t *resp)
 {
     bool send_reply = false;
@@ -299,6 +341,10 @@ bool dispatch(const udp_message_t *req, udp_message_t *resp)
         break;
     case MSG_DELETE_CONN:
         handle_delete_conn(req, resp);
+        send_reply = true;
+        break;
+    case MSG_SWITCH_CONNECTION_LINE:
+        handle_switch_connection_line(req, resp);
         send_reply = true;
         break;
     default:

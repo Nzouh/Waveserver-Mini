@@ -8,6 +8,48 @@ static protection_group_t group;
 static protected_connection_t conns[MAX_CONNS];
 static int notify_socket;
 
+bool refresh_protected_connections(void)
+{
+    udp_message_t req = {0};
+    req.msg_type = MSG_GET_CONNECTIONS;
+    req.status = STATUS_REQUEST;
+
+    udp_message_t resp = {0};
+    if (!send_udp_message_and_receive(notify_socket, &req, &resp, CONN_MANAGER_UDP))
+    {
+        LOG(LOG_ERROR, "Failed to fetch connections from conn_mgr");
+        return false;
+    }
+
+    if (resp.status != STATUS_SUCCESS)
+    {
+        LOG(LOG_ERROR, "conn_mgr returned failure for MSG_GET_CONNECTIONS");
+        return false;
+    }
+
+    udp_get_connections_reply_t *all = (udp_get_connections_reply_t *)resp.payload;
+    memset(conns, 0, sizeof(conns));
+
+    int idx = 0;
+    for (int i = 0; i < all->conn_count && idx < MAX_CONNS; i++)
+    {
+        conn_t *c = &all->all_connections[i];
+        if (c->line_port != PROTECTION_LINE_A && c->line_port != PROTECTION_LINE_B)
+            continue;
+
+        conns[idx].in_use = true;
+        conns[idx].client_port = c->client_port;
+        conns[idx].original_line_port = c->line_port;
+        conns[idx].current_line_port = c->line_port;
+        conns[idx].switched = false;
+        strncpy(conns[idx].conn_name, c->conn_name, MAX_CONN_NAME_CHARACTER - 1);
+        idx++;
+    }
+
+    LOG(LOG_INFO, "Protected connections snapshot loaded: %d", idx);
+    return true;
+}
+
 void initialize_protection()
 {
     memset(&group, 0, sizeof(group));
@@ -39,6 +81,12 @@ void handle_set_protection_group(udp_message_t *response)
     if (group.active)
     {
         set_error_msg(response, "protection group already active");
+        return;
+    }
+
+    if (!refresh_protected_connections())
+    {
+        set_error_msg(response, "failed to snapshot connections");
         return;
     }
 
