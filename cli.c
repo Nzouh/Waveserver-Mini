@@ -237,27 +237,72 @@ void cmd_show_traffic_stats(void)
 }
 
 /**
+ * This function is a helper method for cmd_show_logs(...)
+ * Since it needs to extract both level & service that are in the bracket
+ * The code is the same and can be put in this helper function
+ */
+bool extract_bracketed(char **pos, char *out, size_t out_size)
+{
+    char *start = strchr(*pos, '[');
+    if (!start) return false;
+    
+    char *end = strchr(start, ']');
+    if (!end) return false;
+    
+    int len = end - start - 1;
+    if (len <= 0 || len >= (int)out_size) return false;
+    
+    strncpy(out, start + 1, len);
+    out[len] = '\0';
+
+    *pos = end + 1;
+    return true;
+}
+
+/**
  * show logs [--level LEVEL] [--service SERVICE] — Read and display the shared log file.
  * If --level is given, only show lines matching that level (ERROR, WARN, INFO, DEBUG)
  * If --service is given, only show lines from that service (conn_mgr, port_mgr, traffic_mgr, cli)
- * Both filters can be combined.
+ *  Both filters can be combined.
  *
  * This command doesn't use sockets — it reads the log file directly.
  */
 void cmd_show_logs(const char *level_filter, const char *service_filter)
 {
-    // TODO: F5 — Show Logs with Filtering (/3 pts)
-    //
-    // Read the shared log file (see LOG_FILE_PATH in common.h) and print its contents.
-    //
-    // Log lines follow this format:
-    //   [timestamp] [LEVEL] [service] [file:line] message
-    //
-    // Filtering rules:
-    //   - level_filter: if provided, only show lines whose level tag matches (i.e., "ERROR", "WARN", "DEBUG", "INFO"). 
-    //   - service_filter: if provided, only show lines from that service (i.e., "port_mgr", "conn_mgr", "traffic_mgr", "cli")
-    //   - Both filters can be active at the same time, and should be case insensitive
-    //   - If neither filter is set, print everything.
+    FILE *f = fopen(LOG_FILE_PATH, "r");
+    if (!f)
+    {
+        printf("[ERROR] Failed to open log file %s\n", LOG_FILE_PATH);
+        return;
+    }
+
+    char line[512];
+    bool has_filter = (level_filter != NULL) || (service_filter != NULL);
+
+    while (fgets(line, sizeof(line), f))
+    {
+        // if filters are not provided we can skip over the logic and just print
+        if (!has_filter) {
+            printf("%s", line);
+        } else {
+            // then we have to extract using the helper function
+            char *p = line + 20;
+            char level[32] = {0};
+            char service[32] = {0};
+
+            if (!extract_bracketed(&p, level, sizeof(level))) continue;
+            if (!extract_bracketed(&p, service, sizeof(service))) continue;
+
+            bool level_ok = (level_filter == NULL) || (strcasecmp(level, level_filter) == 0);
+            bool service_ok = (service_filter == NULL) || (strcasecmp(service, service_filter) == 0);
+
+            if (level_ok && service_ok) {
+                printf("%s", line);
+            }
+        }
+    }
+    
+    fclose(f);
 }
 
 /**
