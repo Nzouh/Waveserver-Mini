@@ -556,6 +556,80 @@ void cmd_show_protection_group(void)
 }
 
 /**
+ * set protection group — Enable 1+1 line protection between port 1 and port 2.
+ */
+void cmd_set_protection_group(void)
+{
+    udp_message_t req = {0};
+    req.msg_type = MSG_SET_PROTECTION_GROUP;
+    req.status = STATUS_REQUEST;
+
+    udp_message_t resp = {0};
+    if (!send_and_receive(&req, &resp, PROTECTION_MGR_UDP) || resp.status != STATUS_SUCCESS)
+    {
+        print_cmd_error(&resp, "set protection group", "");
+        return;
+    }
+    printf("[OK] Protection group created: port-1 <-> port-2\n");
+}
+
+/**
+ * delete protection group — Disable 1+1 line protection.
+ */
+void cmd_delete_protection_group(void)
+{
+    udp_message_t req = {0};
+    req.msg_type = MSG_DELETE_PROTECTION_GROUP;
+    req.status = STATUS_REQUEST;
+
+    udp_message_t resp = {0};
+    if (!send_and_receive(&req, &resp, PROTECTION_MGR_UDP) || resp.status != STATUS_SUCCESS)
+    {
+        print_cmd_error(&resp, "delete protection group", "");
+        return;
+    }
+    printf("[OK] Protection group deleted\n");
+}
+
+/**
+ * show protection group — Display protection group state and connection status.
+ */
+void cmd_show_protection_group(void)
+{
+    udp_message_t req = {0};
+    req.msg_type = MSG_GET_PROTECTION_GROUP;
+    req.status = STATUS_REQUEST;
+
+    udp_message_t resp = {0};
+    if (!send_and_receive(&req, &resp, PROTECTION_MGR_UDP) || resp.status != STATUS_SUCCESS)
+    {
+        printf("[ERROR] Failed to get protection group state\n");
+        return;
+    }
+
+    udp_get_protection_group_reply_t *reply = (udp_get_protection_group_reply_t *)resp.payload;
+    protection_group_t *group = &reply->group;
+
+    printf("\n");
+    printf("  Protection Group: %s\n", group->active ? "ACTIVE" : "INACTIVE");
+    printf("  Members:          port-%u <-> port-%u\n", group->line_a, group->line_b);
+    printf("  Switchovers:      %u\n", group->switchover_count);
+    printf("  Connection  Original Line  Current Line  State\n");
+    printf("  ──────────  ─────────────  ────────────  ──────────\n");
+
+    for (uint8_t i = 0; i < reply->conn_count; i++)
+    {
+        protected_connection_t *conn = &reply->conns[i];
+        printf("  %-10s  port-%-7u  port-%-8u  %s\n",
+               conn->conn_name,
+               conn->original_line_port,
+               conn->current_line_port,
+               conn->switched ? "switched" : "normal");
+    }
+    printf("\n");
+}
+
+/**
  * help — Print all available commands.
  */
 void cmd_help(void)
